@@ -1,0 +1,9 @@
+---
+openio_data_mounts:
+{% for mount in mountpoints %}
+  - { mountpoint: "{{ mount }}" }
+{% endfor %}
+openio_metadata_mounts:
+{% for mount in mountpoints %}
+  - { mountpoint: "{{ mount }}" }
+{% endfor %}

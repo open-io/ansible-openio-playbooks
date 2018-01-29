@@ -1,0 +1,16 @@
+- name: Generate host_vars mountpoints list
+  hosts: openio
+  gather_facts: true
+  vars:
+    mntmatch: '/mnt/.*'
+  tasks:
+    - name: Setfact mountpoints
+      set_fact:
+        mountpoints: "{{ ansible_mounts|map(attribute='mount')|map('regex_search',mntmatch)|select('string')|list|unique }}"
+    - debug:
+        var: mountpoints
+    - name: Generate host_vars files
+      template:
+        src: host_vars.yml.j2
+        dest: ./host_vars/{{ inventory_hostname }}.yml
+      delegate_to: localhost
