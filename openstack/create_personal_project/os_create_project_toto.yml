@@ -1,0 +1,176 @@
+- name: Create an OpenStack project
+  hosts: localhost
+  vars:
+    username: toto
+    firstname: tati
+    lastname: tata
+    projects:
+      - name: "{{ username }}"
+        password: "{{ username }}"
+        email: "{{ firstname |lower}}.{{ lastname |lower}}@openio.io"
+        state: present
+        cores: 12
+        fixed_ips: 1024
+        floating_ips: 3
+        floatingip: 3
+        gigabytes: 100
+        instances: 12
+        key_pairs: 50
+        ram: 20480
+        snapshots: 36
+        volumes: 36
+    domain_id: default
+    public_key: ''
+  tasks:
+    - name: Create project
+      os_project:
+        cloud: openio_openstack
+        state: present
+        name: "{{ item.name }}"
+        description: "{{ item.name }}"
+        domain_id: "{{ item.domain_id |default(domain_id) }}"
+        enabled: True
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Update quotas
+      os_quota:
+        cloud: openio_openstack
+        name: "{{ item.name }}"
+        #backup_gigabytes: "{{ item.backup_gigabytes }}"
+        #backups: "{{ item.backups }}"
+        cores: "{{ item.cores }}"
+        fixed_ips: "{{ item.fixed_ips }}"
+        floating_ips: "{{ item.floating_ips }}"
+        floatingip: "{{ item.floatingip }}"
+        gigabytes: "{{ item.gigabytes }}"
+        #injected_file_size: "{{ item.injected_file_size }}"
+        #injected_files: "{{ item.injected_files }}"
+        #injected_path_size: "{{ item.injected_path_size }}"
+        instances: "{{ item.instances }}"
+        key_pairs: "{{ item.key_pairs }}"
+        #loadbalancer: "{{ item.loadbalancer }}"
+        #per_volume_gigabytes: "{{ item.per_volume_gigabytes }}"
+        #pool: "{{ item.pool }}"
+        #port: "{{ item.port }}"
+        #properties: "{{ item.properties }}"
+        ram: "{{ item.ram }}"
+        #security_group_rule: "{{ item.security_group_rule }}"
+        #security_group: "{{ item.security_group }}"
+        #server_group_members: "{{ item.server_group_members }}"
+        #server_groups: "{{ item.server_groups }}"
+        snapshots: "{{ item.snapshots }}"
+        volumes: "{{ item.volumes }}"
+        #volumes_types:
+        #  volumes_lvm: "{{ item.volumes_lvm }}"
+        #snapshots_types:
+        #  snapshots_lvm: "{{ item.snapshots_lvm }}"
+        #gigabytes_types:
+        #  gigabytes_lvm: "{{ item.gigabytes_lvm }}"
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Create user
+      os_user:
+        cloud: openio_openstack
+        state: present
+        name: "{{ item.name }}"
+        password: "{{ item.password }}"
+        update_password: on_create
+        email: "{{ item.email }}"
+        domain: default
+        default_project: "{{ item.name }}"
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Add user as admin
+      os_user_role:
+        cloud: openio_openstack
+        user: "{{ item.name }}"
+        role: _member_
+        project: "{{ item.name }}"
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Add keypair
+      os_keypair:
+        cloud: openio_openstack
+        state: present
+        name: "{{ item.name }}"
+        public_key: "{{ item.public_key |default(public_key) }}"
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: "Add security rule: Enable ICMP"
+      os_security_group_rule:
+        cloud: openio_openstack
+        project: "{{ item.name }}"
+        security_group: default
+        protocol: icmp
+        port_range_min: -1
+        port_range_max: -1
+        remote_ip_prefix: 0.0.0.0/0
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: "Add security rule: Enable TCP"
+      os_security_group_rule:
+        cloud: openio_openstack
+        project: "{{ item.name }}"
+        security_group: default
+        protocol: tcp
+        port_range_min: -1
+        port_range_max: -1
+        remote_ip_prefix: 0.0.0.0/0
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Create private network
+      os_network:
+        cloud: openio_openstack
+        state: present
+        name: private_network
+        project: "{{ item.name }}"
+        external: false
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Create private subnet
+      os_subnet:
+        cloud: openio_openstack
+        state: present
+        network_name: private_network
+        #network_name: 8323c509-61d5-4e3c-a3bd-38d03a97c1d5 #Filter does not work
+        name: private_subnet
+        project: "{{ item.name }}"
+        cidr: 10.0.0.0/8
+        gateway_ip: 10.0.0.1
+        allocation_pool_start: 10.0.0.2
+        allocation_pool_end: 10.255.255.254
+        dns_nameservers:
+          - 8.8.4.4
+          - 8.8.8.8
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"
+    - name: Create router
+      os_router:
+        cloud: openio_openstack
+        state: present
+        name: router1
+        project: "{{ item.name }}"
+        network: external_network
+        external_fixed_ips:
+          - subnet: public_subnet
+        interfaces:
+          - private_subnet
+          #- 910c9e97-55a9-4d83-91d3-31f51853612a #Filter does not work
+        wait: yes
+      with_items:
+        - "{{ projects }}"
+      when: item.state == "present"

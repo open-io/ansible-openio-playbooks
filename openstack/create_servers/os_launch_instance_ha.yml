@@ -1,0 +1,69 @@
+# Export Openstack Credentials
+- name: launch a compute instance
+  hosts: localhost
+  vars:
+    server_name: pouet
+    nbservers: 2
+    image: CentOS-7-x86_64-1806
+    #image: Ubuntu-16.04-amd64-20180522
+    sshkeys: "{{ lookup('file', 'sshpubkeys') }}"
+    flavor: c1.m4
+    vip: true
+    network: 4accfb4e-3746-4126-a720-c2841af82dc8 #racciari
+  tasks:
+    - name: Create a volume
+      os_volume:
+        state: present
+        availability_zone: nova
+        size: 8
+        image: "{{ image }}"
+        display_name: "{{ server_name }}{{ item }}-rootvol"
+        volume_type: SSD
+        wait: yes
+      with_sequence: count={{ nbservers }}
+    - name: Create a port
+      os_port:
+        state: present
+        name: "{{ server_name }}{{ item }}-privip"
+        #network: private_network # Not supported ATM
+        network: "{{ network }}"
+      with_sequence: count={{ nbservers }}
+    - name: Launch instance
+      os_server:
+        state: present
+#        boot_from_volume: yes
+#        image: "{{ image }}"
+        name: "{{ server_name }}{{ item }}"
+        availability_zone: nova
+        key_name: racciari
+        timeout: 200
+        flavor: "{{ flavor }}"
+        security_groups: default
+        #network: "{{ network }}"
+        nics: "port-name={{ server_name }}{{ item }}-privip"
+        terminate_volume: yes
+#        auto_ip: yes # Floating IP
+        auto_ip: no
+        boot_volume: "{{ server_name }}{{ item }}-rootvol"
+        userdata: |
+          #!/bin/bash
+          echo "{{ sshkeys }}" >> /root/.ssh/authorized_keys
+      with_sequence: count={{ nbservers }}
+      register: os_servers
+    - name: Create a port for the VIP
+      os_port:
+        state: present
+        name: "{{ server_name }}-vip"
+        #network: private_network
+        network: 4accfb4e-3746-4126-a720-c2841af82dc8 #racciari
+      register: portvip
+    - name: Allow VIP address to server ports
+      os_port:
+        state: present
+        name: "{{ item.server.name }}-privip"
+        device_id: "{{ item.server.id }}"
+        #network: private_network
+        network: "{{ network }}"
+        allowed_address_pairs: "[{{ {'ip_address': 'x' }|combine({'ip_address':portvip.port.fixed_ips[0].ip_address}) }}]"
+      with_items: "{{ os_servers.results }}"
+      when: vip is defined and vip|bool
