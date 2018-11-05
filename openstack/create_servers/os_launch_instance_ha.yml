@@ -55,7 +55,7 @@
         state: present
         name: "{{ server_name }}-vip"
         #network: private_network
-        network: 4accfb4e-3746-4126-a720-c2841af82dc8 #racciari
+        network: "{{ network }}"
       register: portvip
     - name: Allow VIP address to server ports
       os_port:
